@@ -10,30 +10,15 @@ load_dotenv()
 
 CONFIG = {
     'RPC_URL': os.getenv('RPC_URL', 'https://rpc.hyperliquid.xyz/evm'),
-    'VAULT_MANAGER_ADDRESS': '0x7E698EEa0709e4a0Dbbd790fC493D60691801157',
-    'TOKEN_ADDRESS': '0x54a98ff45a7dbdf30c54e32fd330d3ea582a5559',
-    'CHECK_INTERVAL': 60,
-    'WEBHOOK_URL': None
+    'VAULT_ADDRESS': os.getenv('VAULT_ADDRESS', '0x54a98ff45a7dbdf30c54e32fd330d3ea582a5559'),
+    'CHECK_INTERVAL': int(os.getenv('CHECK_INTERVAL', '60')),
+    'WEBHOOK_URL': os.getenv('WEBHOOK_URL', None)
 }
 
 VAULT_ABI = [
     {
-        "inputs": [],
-        "name": "maxDepositAmount",
-        "outputs": [{"name": "", "type": "uint256"}],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "maxWithdrawalAmount",
-        "outputs": [{"name": "", "type": "uint256"}],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "maxTokenSupply",
+        "inputs": [{"name": "receiver", "type": "address"}],
+        "name": "maxDeposit",
         "outputs": [{"name": "", "type": "uint256"}],
         "stateMutability": "view",
         "type": "function"
@@ -51,6 +36,13 @@ VAULT_ABI = [
         "outputs": [{"name": "", "type": "uint256"}],
         "stateMutability": "view",
         "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "asset",
+        "outputs": [{"name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
     }
 ]
 
@@ -63,7 +55,7 @@ class VaultCapMonitor:
             raise Exception("❌ Unable to connect to HyperEVM RPC")
 
         self.vault = self.w3.eth.contract(
-            address=Web3.to_checksum_address(CONFIG['VAULT_MANAGER_ADDRESS']),
+            address=Web3.to_checksum_address(CONFIG['VAULT_ADDRESS']),
             abi=VAULT_ABI
         )
         self.previous_cap = None
@@ -72,7 +64,7 @@ class VaultCapMonitor:
 
     def get_current_cap(self):
         try:
-            max_deposit = self.vault.functions.maxDepositAmount().call()
+            max_deposit = self.vault.functions.maxDeposit('0x0000000000000000000000000000000000000000').call()
             return self.w3.from_wei(max_deposit, 'ether')
         except Exception as e:
             print(f"⚠️  Error fetching cap: {e}")
@@ -80,8 +72,8 @@ class VaultCapMonitor:
 
     def get_max_token_supply(self):
         try:
-            max_supply = self.vault.functions.maxTokenSupply().call()
-            return self.w3.from_wei(max_supply, 'ether')
+            total_supply = self.vault.functions.totalSupply().call()
+            return self.w3.from_wei(total_supply, 'ether')
         except Exception:
             return 'N/A'
 
@@ -103,7 +95,7 @@ class VaultCapMonitor:
                 f"New: {data['new_cap']:.2f} USDe\n"
                 f"Change: {'+' if data['change'] > 0 else ''}{data['change']:.2f} ({data['change_percent']:.2f}%)\n"
                 f"Total Assets: {data['total_assets']} USDe\n"
-                f"Max Supply: {data['max_supply']} HLPe\n"
+                f"Total Supply: {data['max_supply']} HLPe\n"
                 f"Time: {data['timestamp']}"
             )
 
@@ -132,7 +124,7 @@ class VaultCapMonitor:
             print(f"\n[{timestamp}] Checking vault...")
             print(f"  Max deposit cap: {current_cap} USDe")
             print(f"  Total assets: {total_assets} USDe")
-            print(f"  Max token supply: {max_supply} HLPe")
+            print(f"  Total supply: {max_supply} HLPe")
 
             if self.previous_cap is None:
                 print(f"  📊 Initial cap detected: {current_cap} USDe")
@@ -170,7 +162,7 @@ class VaultCapMonitor:
         print("\n" + "="*60)
         print("🔍 Hyena Vault Cap Monitor started")
         print("="*60)
-        print(f"📍 Vault Manager: {CONFIG['VAULT_MANAGER_ADDRESS']}")
+        print(f"📍 HLPe Vault: {CONFIG['VAULT_ADDRESS']}")
         print(f"🔗 RPC: {CONFIG['RPC_URL']}")
         print(f"⏱️  Check interval: {CONFIG['CHECK_INTERVAL']}s")
         print("="*60)
